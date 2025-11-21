@@ -1,0 +1,35 @@
+name: Finance Bot Daily Run
+
+on:
+  schedule:
+    # UTC 기준 23:00은 한국 시간(KST)으로 다음 날 오전 08:00입니다.
+    # cron 문법: '분 시 일 월 요일'
+    - cron: '0 23 * * *'
+  
+  # (옵션) Github 웹사이트에서 버튼 눌러서 수동 실행 가능하게 함
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 저장소 코드 가져오기
+      uses: actions/checkout@v3
+
+    - name: 파이썬 설정 (3.9 버전)
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: 라이브러리 설치
+      run: |
+        pip install -r requirements.txt
+
+    - name: 봇 실행
+      env:
+        # Secrets에 저장한 값을 환경변수로 불러옵니다
+        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        CHAT_ID: ${{ secrets.CHAT_ID }}
+      run: |
+        python main.py
