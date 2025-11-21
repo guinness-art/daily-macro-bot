@@ -49,8 +49,16 @@ def send_telegram_message():
     summary_text = get_financial_summary()
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     data = {'chat_id': CHAT_ID, 'text': summary_text}
-    requests.post(url, data=data)
-    print("전송 완료")
+    
+    # 수정된 부분: 응답(response)을 받아서 확인합니다.
+    response = requests.post(url, data=data)
+    
+    if response.status_code == 200:
+        print("✅ 텔레그램 서버 전송 성공!")
+    else:
+        # 실패했다면 왜 실패했는지 텔레그램이 알려주는 메시지를 출력합니다.
+        print(f"❌ 전송 실패! 상태 코드: {response.status_code}")
+        print(f"상세 에러 내용: {response.text}")
 
 if __name__ == "__main__":
     send_telegram_message()
