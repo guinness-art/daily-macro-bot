@@ -66,7 +66,7 @@ def get_macro_summary():
             if name in latest:
                 price = latest[name]
                 change_pct = ((price - prev[name]) / prev[name]) * 100
-                emoji = "🟢" if change_pct > 0 else "🔻"
+                emoji = "🔺" if change_pct > 0 else "🔻"
                 if change_pct == 0: emoji = "➖"
                 
                 msg += f"{emoji} {name}\n"
@@ -92,7 +92,8 @@ def ensure_data_consistency():
     need_backfill = False
     if not os.path.exists(DATA_FILE): need_backfill = True
     else:
-        if len(pd.read_csv(DATA_FILE, index_col=0)) < 20: need_backfill = True
+        # 수정: 데이터가 5일치보다 적으면 복원하도록 변경
+        if len(pd.read_csv(DATA_FILE, index_col=0)) < 5: need_backfill = True
             
     if need_backfill:
         print("⚠️ 과거 데이터 복원 중... (시간 소요)")
@@ -148,14 +149,13 @@ def update_and_analyze_mcap():
         prev_rk = {t: i+1 for i, t in enumerate(prev_s.index)}
         
         # ------------------------------------------
-        # (1) Top 10 변동 (가장 중요!)
+        # (1) Top 10 변동
         # ------------------------------------------
         msg.append("\n🏆 [Top 10 최상위 변동]")
         top10_changes = []
         for t in today_s.head(10).index:
             cur, prv = today_rk.get(t), prev_rk.get(t)
             if prv and cur != prv:
-                # 10위권 내 변동은 불꽃(🔥) 아이콘 사용
                 top10_changes.append(f"🔥 {t}: {prv}위 → {cur}위")
         
         if top10_changes: msg.extend(top10_changes)
@@ -166,7 +166,6 @@ def update_and_analyze_mcap():
         # ------------------------------------------
         msg.append("\n📅 [Top 11~30위권 변동]")
         mid_changes = []
-        # 10위 밖 ~ 30위 안쪽 종목들만 체크
         for t in today_s.iloc[10:30].index:
             cur, prv = today_rk.get(t), prev_rk.get(t)
             if prv and cur != prv:
@@ -180,12 +179,16 @@ def update_and_analyze_mcap():
         msg.append("   (데이터 수집 중: 2일차부터 분석 가능)")
     
     # ------------------------------------------
-    # (3) 20일 이평선 진입/이탈
+    # (3) 5일 이평선 진입/이탈 (수정됨)
     # ------------------------------------------
-    msg.append("\n🌊 [20일 평균 Top 30 진입/이탈]")
-    if len(df) >= 20:
-        ma_today = df.iloc[-20:].mean().sort_values(ascending=False)
-        ma_prev = df.iloc[-21:-1].mean().sort_values(ascending=False)
+    msg.append("\n🌊 [5일 평균 Top 30 진입/이탈]")
+    
+    # 수정: 데이터가 5일 이상이면 분석 수행
+    if len(df) >= 5:
+        # 최근 5일 평균
+        ma_today = df.iloc[-5:].mean().sort_values(ascending=False)
+        # 어제 기준 5일 평균 (오늘 제외, 어제부터 5일 전)
+        ma_prev = df.iloc[-6:-1].mean().sort_values(ascending=False)
         
         new_in = set(ma_today.head(30).index) - set(ma_prev.head(30).index)
         out = set(ma_prev.head(30).index) - set(ma_today.head(30).index)
@@ -196,7 +199,8 @@ def update_and_analyze_mcap():
             for t in out: msg.append(f"🍂 [이탈] {t}")
         if not new_in and not out: msg.append("   특이 사항 없음")
     else:
-        msg.append(f"   (데이터 쌓는 중: {len(df)}/20일)")
+        # 메시지 수정: 20일 -> 5일
+        msg.append(f"   (데이터 쌓는 중: {len(df)}/5일)")
 
     return "\n".join(msg)
 
