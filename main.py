@@ -9,7 +9,7 @@ CHAT_ID = os.environ.get('CHAT_ID')
 
 def get_financial_summary():
     tickers = {
-        '원/달러': 'KRW=X', '엔/원': 'JPYKRW=X', '유로/원': 'EURKRW=X',
+        '원/달러': 'KRW=X', '원/엔': 'JPYKRW=X', '원/유로': 'EURKRW=X',
         '달러/위안': 'CNY=X', '금 선물': 'GC=F', 'WTI 원유': 'CL=F',
         'S&P 500': '^GSPC', '나스닥': '^IXIC', '닛케이': '^N225',
         '코스피': '^KS11', '코스닥': '^KQ11', '미 국채 10년': '^TNX'
