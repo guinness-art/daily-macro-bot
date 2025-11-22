@@ -5,15 +5,13 @@ import os
 from datetime import datetime
 
 # =========================================================
-# [공통 설정] 텔레그램 및 파일 경로
+# [설정] 텔레그램 토큰 및 감시 종목
 # =========================================================
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
 CHAT_ID = os.environ.get('CHAT_ID')
 DATA_FILE = "market_cap_history.csv"
 
-# =========================================================
-# [기능 1] 매크로 지표 (환율, 지수, 원자재) 관련 설정
-# =========================================================
+# 1. 매크로 지표
 MACRO_TICKERS = {
     '원/달러': 'KRW=X', '원/엔': 'JPYKRW=X', '원/유로': 'EURKRW=X',
     '달러/위안': 'CNY=X', '금 선물': 'GC=F', 'WTI 원유': 'CL=F',
@@ -21,9 +19,7 @@ MACRO_TICKERS = {
     '코스피': '^KS11', '코스닥': '^KQ11', '미 국채 10년': '^TNX'
 }
 
-# =========================================================
-# [기능 2] 시가총액 분석 관련 설정 (Top 50 후보군)
-# =========================================================
+# 2. 시가총액 상위 감시 대상 (Top 50 후보군)
 MCAP_WATCHLIST = [
     'AAPL', 'MSFT', 'NVDA', 'GOOG', 'AMZN', 'META', 'TSLA', 'BRK-A', 'LLY', 'AVGO',
     'JPM', 'V', 'ORCL', 'WMT', 'XOM', 'MA', 'NFLX', 'JNJ', 'COST', 'ABBV', 'PLTR', 'BAC',
@@ -33,7 +29,7 @@ MCAP_WATCHLIST = [
 ]
 
 # =========================================================
-# [공통 함수] 텔레그램 전송
+# [함수] 텔레그램 전송
 # =========================================================
 def send_telegram(message):
     if not TELEGRAM_TOKEN or not CHAT_ID:
@@ -49,7 +45,7 @@ def send_telegram(message):
         print(f"❌ 전송 실패: {e}")
 
 # =========================================================
-# [로직 1] 매크로 지표 요약 생성
+# [로직 1] 매크로 지표 요약
 # =========================================================
 def get_macro_summary():
     print("\n[1단계] 매크로 지표 수집 중...")
@@ -70,8 +66,6 @@ def get_macro_summary():
             if name in latest:
                 price = latest[name]
                 change_pct = ((price - prev[name]) / prev[name]) * 100
-                
-                # 이모지: 상승(초록원), 하락(빨간역삼각)
                 emoji = "🟢" if change_pct > 0 else "🔻"
                 if change_pct == 0: emoji = "➖"
                 
@@ -95,14 +89,13 @@ def get_shares_outstanding(tickers):
     return shares_data
 
 def ensure_data_consistency():
-    # 데이터가 없거나 부족하면 과거 30일치 복원(Backfill)
     need_backfill = False
     if not os.path.exists(DATA_FILE): need_backfill = True
     else:
         if len(pd.read_csv(DATA_FILE, index_col=0)) < 20: need_backfill = True
             
     if need_backfill:
-        print("⚠️ 과거 데이터 복원 중... (시간이 좀 걸립니다)")
+        print("⚠️ 과거 데이터 복원 중... (시간 소요)")
         shares = get_shares_outstanding(MCAP_WATCHLIST)
         hist = yf.download(list(shares.keys()), period="1mo", progress=False)['Close']
         mcap_data = {}
@@ -121,12 +114,9 @@ def ensure_data_consistency():
         print("✅ 데이터 복원 완료")
 
 def update_and_analyze_mcap():
-    print("\n[2단계] 시가총액 데이터 분석 중...")
-    
-    # 1. 데이터 정합성 체크
+    print("\n[2단계] 시가총액 분석 중...")
     ensure_data_consistency()
     
-    # 2. 오늘 데이터 업데이트
     if os.path.exists(DATA_FILE): df = pd.read_csv(DATA_FILE, index_col=0)
     else: df = pd.DataFrame()
 
@@ -144,33 +134,54 @@ def update_and_analyze_mcap():
     if today_str in df.index: df = df.drop(today_str)
     df = pd.concat([df, new_row])
     df.sort_index(inplace=True)
-    df.to_csv(DATA_FILE) # 저장
+    df.to_csv(DATA_FILE)
     
-    # 3. 분석 보고서 작성
+    # ---- 보고서 작성 시작 ----
     msg = []
-    msg.append(f"🇺🇸 [미국 시총 순위 변동] {today_str}")
+    msg.append(f"🇺🇸 [미국 시총 순위 분석] {today_str}")
     msg.append("=" * 30)
     
-    # (1) 일간 변동 (Top 30)
-    msg.append("\n📅 [Top 30 일간 변동]")
     if len(df) >= 2:
         today_s = df.iloc[-1].sort_values(ascending=False)
         prev_s = df.iloc[-2].sort_values(ascending=False)
         today_rk = {t: i+1 for i, t in enumerate(today_s.index)}
         prev_rk = {t: i+1 for i, t in enumerate(prev_s.index)}
         
-        changes = []
-        for t in today_s.head(30).index:
+        # ------------------------------------------
+        # (1) Top 10 변동 (가장 중요!)
+        # ------------------------------------------
+        msg.append("\n🏆 [Top 10 최상위 변동]")
+        top10_changes = []
+        for t in today_s.head(10).index:
+            cur, prv = today_rk.get(t), prev_rk.get(t)
+            if prv and cur != prv:
+                # 10위권 내 변동은 불꽃(🔥) 아이콘 사용
+                top10_changes.append(f"🔥 {t}: {prv}위 → {cur}위")
+        
+        if top10_changes: msg.extend(top10_changes)
+        else: msg.append("   변동 없음 (고요함)")
+
+        # ------------------------------------------
+        # (2) Top 11 ~ 30 변동
+        # ------------------------------------------
+        msg.append("\n📅 [Top 11~30위권 변동]")
+        mid_changes = []
+        # 10위 밖 ~ 30위 안쪽 종목들만 체크
+        for t in today_s.iloc[10:30].index:
             cur, prv = today_rk.get(t), prev_rk.get(t)
             if prv and cur != prv:
                 icon = "🟢" if prv > cur else "🔻"
-                changes.append(f"{icon} {t}: {prv}위 → {cur}위")
+                mid_changes.append(f"{icon} {t}: {prv}위 → {cur}위")
         
-        if changes: msg.extend(changes)
+        if mid_changes: msg.extend(mid_changes)
         else: msg.append("   변동 없음")
-    else: msg.append("   (데이터 부족)")
+
+    else:
+        msg.append("   (데이터 수집 중: 2일차부터 분석 가능)")
     
-    # (2) 20일 이평선 진입/이탈
+    # ------------------------------------------
+    # (3) 20일 이평선 진입/이탈
+    # ------------------------------------------
     msg.append("\n🌊 [20일 평균 Top 30 진입/이탈]")
     if len(df) >= 20:
         ma_today = df.iloc[-20:].mean().sort_values(ascending=False)
@@ -183,9 +194,9 @@ def update_and_analyze_mcap():
             for t in new_in: msg.append(f"🚀 [진입] {t} (평균 {list(ma_today.index).index(t)+1}위)")
         if out:
             for t in out: msg.append(f"🍂 [이탈] {t}")
-        if not new_in and not out: msg.append("   진입/이탈 없음")
+        if not new_in and not out: msg.append("   특이 사항 없음")
     else:
-        msg.append(f"   (데이터 수집 중: {len(df)}/20일)")
+        msg.append(f"   (데이터 쌓는 중: {len(df)}/20일)")
 
     return "\n".join(msg)
 
@@ -197,6 +208,6 @@ if __name__ == "__main__":
     macro_msg = get_macro_summary()
     send_telegram(macro_msg)
     
-    # 2. 시가총액 분석 전송 (데이터 저장 포함)
+    # 2. 시가총액 분석 전송
     mcap_msg = update_and_analyze_mcap()
     send_telegram(mcap_msg)
